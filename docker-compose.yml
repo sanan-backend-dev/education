@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kitchen}
+      POSTGRES_USER: ${POSTGRES_USER:-kitchen_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kitchen_pass}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kitchen_user} -d ${POSTGRES_DB:-kitchen}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  kitchen-api:
+    build:
+      context: ./kitchen-api
+    ports:
+      - "${KITCHEN_API_PORT:-8000}:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-kitchen_user}:${POSTGRES_PASSWORD:-kitchen_pass}@postgres:5432/${POSTGRES_DB:-kitchen}
+      RESTAURANT_SERVICE_URL: http://restaurant-service:8001
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  restaurant-service:
+    build:
+      context: ./restaurant-service
+    ports:
+      - "${RESTAURANT_SERVICE_PORT:-8001}:8001"
+    environment:
+      KITCHEN_API_URL: http://kitchen-api:8000
+
+volumes:
+  postgres_data:
